@@ -72,7 +72,8 @@ func main() {
 	}
 
 	if create {
-		err = ensureRepoExists(svc, trimHostname(repo, registry))
+		tags := collectTagsFromEnv()
+		err = ensureRepoExists(svc, trimHostname(repo, registry), tags)
 		if err != nil {
 			log.Fatal(fmt.Sprintf("error creating ECR repo: %v", err))
 		}
@@ -118,8 +119,23 @@ func trimHostname(repo, registry string) string {
 	return repo
 }
 
-func ensureRepoExists(svc *ecr.ECR, name string) (err error) {
-	input := &ecr.CreateRepositoryInput{}
+func collectTagsFromEnv() []*ecr.Tag {
+	var tags []*ecr.Tag
+	for _, t := range os.Environ() {
+		if strings.HasPrefix(t, "ECR_REPO_TAGS_") {
+			key := t[strings.LastIndex(t, "_")+1:]
+			value := os.Getenv(t)
+			tags = append(tags, &ecr.Tag{
+				Key:   aws.String(key),
+				Value: aws.String(value),
+			})
+		}
+	}
+	return tags
+}
+
+func ensureRepoExists(svc *ecr.ECR, name string, tags []*ecr.Tag) (err error) {
+	input := &ecr.CreateRepositoryInput{Tags: tags}
 	input.SetRepositoryName(name)
 	_, err = svc.CreateRepository(input)
 	if err != nil {
